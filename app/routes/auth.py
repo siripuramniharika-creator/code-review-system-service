@@ -6,14 +6,14 @@ from app.utils.jwt_handler import create_access_token
 from jose import jwt, JWTError
 from app.utils.password_utils import hash_password, verify_password
 
-from app.models.user_models import (
+from app.schemas.auth import (
     SignupRequest,
     LoginRequest,
     ForgotPasswordRequest
 )
 
 from app.database.db import get_db
-from app.database.user import User
+from app.models.user import User
 
 router = APIRouter(
     prefix="/auth",

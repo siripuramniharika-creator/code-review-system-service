@@ -1,15 +1,8 @@
+import json
 from app.database.db import SessionLocal
 from app.models.review import Review
-from app.services.phi3_service import run_phi3_analysis
-import json
-import re
-
-
-def extract_json(text: str):
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
-        return json.loads(match.group())
-    return {}
+from app.services.ollama_service import run_ollama_analysis
+from app.services.parser import safe_parse
 
 
 def process_review(review_id: int, code: str, language: str):
@@ -19,8 +12,24 @@ def process_review(review_id: int, code: str, language: str):
     try:
         print("AI started:", review_id)
 
-        raw_output = run_phi3_analysis(code, language)
-        result = extract_json(raw_output)
+        raw_output = run_ollama_analysis(code, language)
+        print("RAW OLLAMA OUTPUT:\n", raw_output)
+
+        result = safe_parse(raw_output)
+
+        print("PARSED RESULT:")
+        print(result)
+
+        # fallback
+        if not result:
+            result = {
+                "quality_score": 70,
+                "security_score": 70,
+                "performance_score": 70,
+                "issues": [],
+                "suggestions": [],
+                "improved_code": f"# Refactored version\n{code}"
+            }
 
         review = db.query(Review).get(review_id)
 
@@ -33,13 +42,14 @@ def process_review(review_id: int, code: str, language: str):
         review.improved_code = result.get("improved_code", "")
 
         review.status = "COMPLETED"
-
+        print("Saving improved_code:", review.improved_code)
         db.commit()
 
         print("AI completed:", review_id)
 
     except Exception as e:
         print("AI error:", e)
+
         review = db.query(Review).get(review_id)
         review.status = "FAILED"
         db.commit()

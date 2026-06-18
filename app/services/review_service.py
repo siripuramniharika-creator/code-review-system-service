@@ -1,8 +1,7 @@
 from app.database.db import SessionLocal
 from app.models.review import Review
 import threading
-from app.services.ai_worker import process_review
-
+from app.services.ai_worker import process_review 
 
 def create_review(language: str, code: str):
 

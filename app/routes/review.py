@@ -1,28 +1,56 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-
+from fastapi import APIRouter, BackgroundTasks
 from app.schemas.review import ReviewRequest
-from app.services.review_service import create_review
-from app.database.db import get_db
 from app.models.review import Review
+from app.database.db import SessionLocal
+from app.services.ai_worker import process_review
 
 router = APIRouter()
 
 
 @router.post("/review")
-def review_code(payload: ReviewRequest):
-    return create_review(
+def create_review(payload: ReviewRequest, background_tasks: BackgroundTasks):
+
+    db = SessionLocal()
+
+    review = Review(
+        code=payload.code,
         language=payload.language,
-        code=payload.code
+        status="PROCESSING"
     )
+
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+
+    # run AI in background
+    background_tasks.add_task(
+        process_review,
+        review.id,
+        payload.code,
+        payload.language
+    )
+
+    return {"review_id": review.id}
 
 
 @router.get("/review/{review_id}")
-def get_review(review_id: int, db: Session = Depends(get_db)):
+def get_review(review_id: int):
 
-    review = db.query(Review).filter(Review.id == review_id).first()
+    db = SessionLocal()
+    review = db.query(Review).get(review_id)
+    print(review.improved_code)
+    print(review.quality_score)
 
-    if not review:
-        raise HTTPException(status_code=404, detail="Review not found")
-
-    return review
+    return {
+        "id": review.id,
+        "code": review.code,
+        "language": review.language,
+        "status": review.status,
+        "quality_score": review.quality_score,
+        "security_score": review.security_score,
+        "performance_score": review.performance_score,
+        "issues": review.issues,
+        "suggestions": review.suggestions,
+        "improved_code": review.improved_code,
+        "created_at": review.created_at
+    }
